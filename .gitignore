@@ -1,0 +1,10 @@
+.env
+.env.local
+.openbench/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+runs/*
+!runs/.gitkeep
