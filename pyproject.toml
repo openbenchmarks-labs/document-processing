@@ -31,7 +31,7 @@ dev = ["pytest>=8,<10"]
 openbench-document-processing = "openbenchmarks_document_processing.cli:main"
 
 [project.urls]
-Leaderboard = "https://www.openbenchmarks.dev/document-processing"
+Leaderboard = "https://openbenchmarks.com/document-processing"
 Repository = "https://github.com/openbenchmarks-labs/document-processing"
 Dataset = "https://huggingface.co/datasets/openbenchmarks/OB-LegalQA"
 
