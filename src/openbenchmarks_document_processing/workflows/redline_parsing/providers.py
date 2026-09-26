@@ -32,19 +32,24 @@ LLAMAPARSE_TIER = "agentic"
 # published agentic build 2026-09-09, which the parse endpoint then rejected as
 # an invalid tier/version combination mid-run. A rolling version also means two
 # runs of this arm can score different parses, which is the one thing a board
-# cannot allow; 2026-09-07 is the last agentic build we have parsed with.
-LLAMAPARSE_VERSION = "2026-09-07"
+# cannot allow. The board was re-run on the 2026-09-24 build of both tiers.
+LLAMAPARSE_VERSION = "2026-09-24"
 # The vendor's premium tier, run as its own arm rather than replacing `agentic`:
 # the published numbers were produced on agentic, so swapping it out would break
 # comparability, while hiding it would leave llamaparse the only vendor not
 # measured at its best setting.
 LLAMAPARSE_PLUS_TIER = "agentic_plus"
-LLAMAPARSE_PLUS_VERSION = "2026-08-19"
+LLAMAPARSE_PLUS_VERSION = "2026-09-24"
 REDUCTO_MODEL = "r-1"
 # Tracked changes are opt-in on Reducto exactly as they are on Pulse: without
 # `change_tracking` in the include list the struck text comes back as ordinary
 # prose and the arm measures a flag rather than the parser.
 REDUCTO_FORMATTING = {"include": ["change_tracking"]}
+# Reducto moved r-1 to a new model on 2026-09-25 behind the same invocation: the
+# request is byte-identical, only what answers it changed. The date goes into the
+# settings fingerprint (never into the request) so a parse cached before the
+# change misses instead of being scored as the new model.
+REDUCTO_BUILD = "2026-09-25"
 # Highest-accuracy engine. Agentic OCR stays off: these are clean digital PDFs,
 # where the vendor's own guidance is that it only adds latency.
 EXTEND_ENGINE = "parse_performance"
@@ -874,7 +879,8 @@ VENDORS = {
 SETTINGS: dict[str, dict] = {
     "llamaparse": {"tier": LLAMAPARSE_TIER, "version": LLAMAPARSE_VERSION},
     "llamaparse-plus": {"tier": LLAMAPARSE_PLUS_TIER, "version": LLAMAPARSE_PLUS_VERSION},
-    "reducto": {"model": REDUCTO_MODEL, "formatting": REDUCTO_FORMATTING},
+    "reducto": {"model": REDUCTO_MODEL, "formatting": REDUCTO_FORMATTING,
+                "build": REDUCTO_BUILD},
     "extend": {"engine": EXTEND_ENGINE, "advanced_options": EXTEND_ADVANCED},
     "pulse": {"model": PULSE_MODEL, "refine_options": PULSE_REFINE},
     "mistral-ocr": {"model": MISTRAL_MODEL},
@@ -939,7 +945,8 @@ IDENTITY: dict[str, dict[str, str]] = {
                         "variant": "claude-fable-5-1 · pdf in · bedrock"},
     "pulse":           {"vendor": "Pulse", "variant": f"model={PULSE_MODEL}"},
     "mistral-ocr":     {"vendor": "Mistral", "variant": f"model={MISTRAL_MODEL}"},
-    "reducto":         {"vendor": "Reducto", "variant": f"model={REDUCTO_MODEL}"},
+    "reducto":         {"vendor": "Reducto",
+                        "variant": f"model={REDUCTO_MODEL} · {REDUCTO_BUILD} build"},
 }
 
 
