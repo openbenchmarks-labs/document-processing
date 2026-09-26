@@ -10,16 +10,16 @@ A redline records what the parties struck out. In the Word file a deletion is se
 
 ## Results on tagged PDFs (text layer present)
 
-Numbers are from the 2026-09-15 run, read from the live board on 2026-09-20. The [live board](https://openbenchmarks.com/document-processing) is the source of truth and is re-scored as parsers are added.
+ The [live board](https://openbenchmarks.com/document-processing) is the source of truth and is re-scored as parsers are added.
 
 | Rank | Parser | Type | Answer accuracy | Gap closed | Stale rate | Median parse time | Measured cost / doc | List price / page |
 |---:|---|---|---:|---:|---:|---:|---:|---|
 | | Best case (reference) | Reference | 91.9% | 100% | 3.0% | n/a | $0 | n/a |
 | 1 | Claude Fable 5.1 | Frontier model | 89.1% | 95% | 3.8% | 327s | $2.66 | $11 / $55 per 1M tokens |
-| 2 | LlamaParse agentic plus | Document parser | 80.4% | 82% | 10.2% | 93s | $1.37 | $0.05625 |
-| 3 | Datalab track changes | Document parser | 78.6% | 79% | 11.3% | 34s | $0.24 | $0.006 |
-| 4 | LlamaParse agentic | Document parser | 75.2% | 73% | 14.4% | 52s | $0.30 | $0.0125 |
-| 5 | Reducto | Document parser | 75.1% | 73% | 13.5% | 6s | $0.24 | $0.010 |
+| 2 | LlamaParse agentic plus | Long running agentic parser | 83.4% | 86% | 7.5% | 91s | $1.37 | $0.05625 |
+| 3 | LlamaParse agentic | Document parser | 80.0% | 81% | 9.7% | 52s | $0.30 | $0.0125 |
+| 4 | Reducto | Document parser | 78.7% | 79% | 11.1% | 7s | $0.24 | $0.010 |
+| 5 | Datalab track changes | Document parser | 78.6% | 79% | 11.3% | 34s | $0.24 | $0.006 |
 | 6 | Extend | Document parser | 74.8% | 73% | 12.5% | 28s | $0.61 | $0.025 |
 | 7 | GPT-6 Astra | Frontier model | 63.3% | 55% | 24.3% | 228s | $1.24 | $10 / $50 per 1M tokens |
 | 8 | Datalab convert | Document parser | 62.4% | 53% | 21.9% | 23s | $0.24 | $0.010 |
@@ -45,11 +45,11 @@ The same 94 contracts re-rendered to JPEG at 200 dpi and wrapped back into PDFs,
 | | Best case (reference) | Reference | 91.5% | 100% | 2.9% | n/a | $0 | n/a |
 | 1 | GPT-6 Astra | Frontier model | 91.3% | 100% | 2.9% | 233s | $1.61 | $10 / $50 per 1M tokens |
 | 2 | Datalab track changes | Document parser | 79.7% | 81% | 11.7% | 40s | $0.24 | $0.006 |
-| 3 | Reducto | Document parser | 76.6% | 76% | 12.7% | 8s | $0.24 | $0.010 |
+| 3 | Reducto | Document parser | 76.7% | 76% | 12.1% | 8s | $0.24 | $0.010 |
 | 4 | Extend | Document parser | 76.5% | 76% | 12.9% | 31s | $0.61 | $0.025 |
-| 5 | LlamaParse agentic plus | Document parser | 67.1% | 61% | 22.3% | 138s | $1.37 | $0.05625 |
-| 6 | Pulse | Document parser | 66.6% | 60% | 20.0% | 58s | $0.36 | $0.015 |
-| 7 | LlamaParse agentic | Document parser | 64.5% | 57% | 23.1% | 83s | $0.30 | $0.0125 |
+| 5 | LlamaParse agentic plus | Long running agentic parser | 75.6% | 75% | 14.9% | 143s | $1.37 | $0.05625 |
+| 6 | LlamaParse agentic | Document parser | 67.5% | 62% | 20.4% | 87s | $0.30 | $0.0125 |
+| 7 | Pulse | Document parser | 66.6% | 60% | 20.0% | 58s | $0.36 | $0.015 |
 | 8 | Datalab convert | Document parser | 64.3% | 56% | 20.7% | 46s | $0.24 | $0.010 |
 | | Baseline (reference) | Reference | 29.0% | 0% | 55.1% | n/a | $0 | n/a |
 
@@ -59,7 +59,7 @@ Two arms from the tagged board have no row here. Claude Fable 5.1 could not be r
 
 Claude Fable 5.1 leads the tagged board at 89.1% accuracy, closing 95% of the gap between the baseline and a perfect parse. It is also the slowest and most expensive arm, at 327s median and $2.66 per document, so it is not automatically the right pick.
 
-Among specialised document parsers, LlamaParse agentic plus leads at 80.4%, then Datalab track changes at 78.6%. LlamaParse agentic, Reducto and Extend sit within half a point of each other at 75.2%, 75.1% and 74.8%, close enough that the table does not support ordering them.
+LlamaParse agentic plus leads the parsers at 83.4%. It is a long running agentic parser, at 91s median per contract. Among specialised document parsers, LlamaParse agentic leads at 80.0%. Reducto at 78.7% and Datalab track changes at 78.6% are close enough that the table does not support ordering them, and Extend follows at 74.8%.
 
 The largest single effect on the board is whether tracked-change detection is on. The two Datalab rows are one vendor on two endpoints and are 16 accuracy points apart. That distance is bigger than the gap between any two correctly configured parsers.
 
@@ -67,18 +67,18 @@ The largest single effect on the board is whether tracked-change detection is on
 
 GPT-6 Astra reads the image-only corpus at 91.3%, within noise of the 91.5% best case. The same model on the tagged PDF scores 63.3%. Handing it pixels instead of a PDF with a text layer is worth 28 points.
 
-Among specialised parsers, Datalab track changes leads the scanned board at 79.7%, with Reducto at 76.6% and Extend at 76.5%. Those three score about the same with or without a text layer. LlamaParse agentic plus does not: it drops from 80.4% on the tagged board to 67.1% once the text layer is gone.
+Among specialised parsers, Datalab track changes leads the scanned board at 79.7%, with Reducto at 76.7% and Extend at 76.5%. Those three land within two points of their tagged scores. LlamaParse does not: agentic plus drops from 83.4% on the tagged board to 75.6% once the text layer is gone, and agentic drops from 80.0% to 67.5%.
 
 ## Which document parser is fastest?
 
-Reducto returns a full contract in 6s median on tagged PDFs and 8s on scanned ones. The next fastest parsers are Datalab convert at 23s and Extend at 28s. Mistral OCR returns in 11s but scores 43.4%, closer to the baseline than to any other parser. The frontier models are the slowest arms at 228s and 327s median, with p95 above 300s.
+Reducto returns a full contract in 7s median on tagged PDFs and 8s on scanned ones. The next fastest parsers are Datalab convert at 23s and Extend at 28s. Mistral OCR returns in 11s but scores 43.4%, closer to the baseline than to any other parser. The frontier models are the slowest arms at 228s and 327s median, with p95 above 300s.
 
 ## Which document parser is cheapest?
 
 Measured on this corpus, which averages 24 pages per contract:
 
 - Mistral OCR is cheapest at $0.10 per document, but its 43.4% accuracy closes only 23% of the gap.
-- Datalab track changes, Reducto and Datalab convert each cost $0.24 per document. Datalab track changes posts 78.6% on that spend, the best accuracy per dollar on either board, and lists at $0.006 per page.
+- Datalab track changes, Reducto and Datalab convert each cost $0.24 per document. On that spend Reducto posts 78.7% and Datalab track changes 78.6% on the tagged board, the best accuracy per dollar there. On the scanned board Datalab track changes leads at 79.7%, and it lists at $0.006 per page.
 - The frontier models cost 5 to 11 times more per document than the $0.24 parsers, and their bills scale with tokens rather than pages.
 
 List price is reported separately from measured cost because per-page and per-token products do not share a billing unit.
@@ -117,8 +117,8 @@ Every version is pinned to a date. `latest` is a moving target and would let two
 
 | Arm | Transport | Settings |
 |---|---|---|
-| LlamaParse agentic plus | llama-cloud SDK, `files.create()` then `parsing.parse()` | `tier: agentic_plus`, `version: 2026-08-19` |
-| LlamaParse agentic | llama-cloud SDK, `files.create()` then `parsing.parse()` | `tier: agentic`, `version: 2026-09-07` |
+| LlamaParse agentic plus | llama-cloud SDK, `files.create()` then `parsing.parse()` | `tier: agentic_plus`, `version: 2026-09-24` |
+| LlamaParse agentic | llama-cloud SDK, `files.create()` then `parsing.parse()` | `tier: agentic`, `version: 2026-09-24` |
 | Datalab track changes | REST, multipart POST `/api/v1/track-changes`, polled | `output_format: markdown` |
 | Datalab convert | REST, multipart POST `/api/v1/convert`, polled | `mode: accurate`, `output_format: markdown` |
 | Reducto | reducto SDK, `upload()` then `parse.run()` | `model: r-1`, `formatting.include: change_tracking` |
