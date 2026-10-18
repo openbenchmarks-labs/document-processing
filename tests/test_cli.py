@@ -24,3 +24,14 @@ def test_rejects_private_reference_arm():
         assert exc.code == 2
     else:
         raise AssertionError("accepted must not be exposed by the public CLI")
+
+
+def test_full_run_defaults_to_three_by_three_with_separate_judge():
+    args = build_parser().parse_args(["run", "--arms", "oracle", "--full"])
+    assert (args.repeats, args.asks) == (3, 3)
+    assert args.model != args.judge_model
+
+
+def test_smoke_defaults_to_single_shot():
+    args = build_parser().parse_args(["smoke", "--arms", "oracle"])
+    assert (args.repeats, args.asks) == (1, 1)

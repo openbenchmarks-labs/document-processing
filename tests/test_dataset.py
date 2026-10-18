@@ -33,3 +33,18 @@ def test_loads_tagged_and_scanned(tmp_path):
     assert tagged["doc"].pdf.parent.name == "documents"
     assert scanned["doc"].pdf.parent.name == "documents_scanned"
     assert set(tagged["doc"].views) == {"oracle", "blind"}
+
+
+def test_cross_draft_view_is_chronological(tmp_path):
+    # The dataset lists the later draft first; the reader must still see turn 2
+    # before turn 3, labelled, exactly as the published board presents them.
+    later = dataset.Document("s1-t3-g01a-contract", tmp_path / "t3.pdf")
+    earlier = dataset.Document("s1-t2-g01a-contract", tmp_path / "t2.pdf")
+    documents = {later.document_id: later, earlier.document_id: earlier}
+    case = dataset.Case(id="q", question="What happened between rounds?", task_type="fixture",
+                        documents=[later.document_id, earlier.document_id],
+                        expected_answer="", expected_detail="", match={})
+    view = dataset.view_for(case, documents, {later.document_id: "LATER",
+                                              earlier.document_id: "EARLIER"})
+    assert view == ("===== DRAFT AT TURN 2 (s1-t2-g01a-contract) =====\n\nEARLIER\n\n"
+                    "===== DRAFT AT TURN 3 (s1-t3-g01a-contract) =====\n\nLATER")
