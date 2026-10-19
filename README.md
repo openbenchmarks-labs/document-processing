@@ -6,15 +6,13 @@ Open, independent benchmark of document parsing APIs and frontier models on heav
 
 A redline records what the parties struck out. In the Word file a deletion is semantic. Rendered to PDF it is only a line drawn through some glyphs. If the parser keeps that line as markup, the agent reading its output answers from the position the parties agreed. If the parser drops it, the agent is handed deleted language as though it were still binding, and answers from that instead. This benchmark measures which parsers keep it.
 
-**The parser is under test, never the agent.** The reader model, the judge model, the prompt and the 1,500 questions are identical across every arm. The only thing that changes is the Markdown.
-
 ## Results on tagged PDFs (text layer present)
 
  The [live board](https://openbenchmarks.com/document-processing) is the source of truth and is re-scored as parsers are added.
 
 | Rank | Parser | Type | Accuracy | Gap closed | Median parse time | Parser $ / 1k pages | Parser $ / 1k correct | Total tokens / 1k correct | List price |
 |---:|---|---|---:|---:|---:|---:|---:|---:|---|
-| | Best case (reference) | Reference | 94.6% ± <0.1 | 100% | n/a | n/a | n/a | 19.4M | n/a |
+| | Best case (reference) | Reference | 94.6% ± 0.0 | 100% | n/a | n/a | n/a | 19.4M | n/a |
 | 1 | Extend | Document parser | 93.1% ± 0.3 | 98% | 17s | $25.00 | $40.91 | 22.5M | $0.025 / page |
 | 2 | Claude Fable 5.1 | Frontier model | 91.4% ± 0.3 | 95% | 336s | $109.67 | $182.99 | 20.8M | $11 / $55 per 1M tokens |
 | 3 | Reducto | Document parser | 84.8% ± 0.3 | 86% | 5s | $10.00 | $17.97 | 26.4M | $0.010 / page |
@@ -92,8 +90,6 @@ List price is reported separately from measured cost because per-page and per-to
 
 Parsing is the first step in a RAG or agent pipeline, and everything downstream inherits its output. If a deleted clause survives unmarked, or old and replacement terms are fused into one string, the wrong facts enter the index before chunking, embedding, retrieval or generation begins. The stale and fused rates in every run's report are that failure, measured.
 
-Every parser that can preserve a strike has to be told to, and the setting is not a footnote:
-
 | Arm | How tracked changes are enabled |
 |---|---|
 | Datalab track changes | dedicated endpoint, `/api/v1/track-changes` |
@@ -122,10 +118,10 @@ Every version is pinned to a date. `latest` is a moving target and would let two
 
 | Arm | Transport | Settings |
 |---|---|---|
-| Extend | extend-ai SDK, `files.upload()` then `parse()` | `engine: parse_performance`, `formattingDetection: change_tracking`, 2026-10-17 build |
+| Extend | extend-ai SDK, `files.upload()` then `parse()` | `engine: parse_performance`, `formattingDetection: change_tracking` |
 | LlamaParse agentic plus | llama-cloud SDK, `files.create()` then `parsing.parse()` | `tier: agentic_plus`, `version: 2026-09-24` |
 | LlamaParse agentic | llama-cloud SDK, `files.create()` then `parsing.parse()` | `tier: agentic`, `version: 2026-09-29` |
-| Reducto | reducto SDK, `upload()` then `parse.run()` | `model: r-1`, `formatting.include: change_tracking`, 2026-10-06 build |
+| Reducto | reducto SDK, `upload()` then `parse.run()` | `model: r-1`, `formatting.include: change_tracking` |
 | Datalab track changes | REST, multipart POST `/api/v1/track-changes`, polled | `output_format: markdown` |
 | Datalab convert | REST, multipart POST `/api/v1/convert`, polled | `mode: accurate`, `output_format: markdown` |
 | Pulse | REST, multipart POST `/extract` | `model: pulse-ultra-2`, `refine_options: text + tables + formatting` |
@@ -246,8 +242,8 @@ Tests use fixtures and mocks. CI must never make paid provider calls. Contributi
 
 ## Changelog
 
-- **2026-10-19.** Harness updated to v2 and every vendor rebenchmarked. Each contract is parsed 3 times and each question asked 3 times per parse (13,500 graded answers per parser, accuracy reported ± SD). The reader is `gpt-6-luna` and a separate judge, `gpt-6-sol`, grades every answer; exact token matching is kept per answer for audit. Repeat parses bypass each vendor's own result cache. New builds: Extend 2026-10-17, Reducto r-1 2026-10-06, LlamaParse agentic 2026-09-29. Added Unstructured (Parse API, `profile=best`).
-- **2026-09-26.** Rebenchmarked LlamaParse agentic and agentic plus on their 2026-09-24 builds, and Reducto on the new r-1 model released 2026-09-25.
+- **2026-10-19.** Harness updated to v2 and every vendor rebenchmarked. Each contract is parsed 3 times and each question asked 3 times per parse (13,500 graded answers per parser, accuracy reported ± SD). The reader is `gpt-6-luna` and a separate judge, `gpt-6-sol`, grades every answer; exact token matching is kept per answer for audit. Repeat parses bypass each vendor's own result cache. Rebenchmarked new versions of Extend, Reducto r-1 and LlamaParse agentic (2026-09-29). Added Unstructured (Parse API, `profile=best`).
+- **2026-09-26.** Rebenchmarked LlamaParse agentic and agentic plus on their 2026-09-24 builds, and Reducto on its newer r-1 model.
 - **2026-09-20.** Benchmark published: 1,500 questions on 94 redlined contracts, scored on tagged PDFs and on image-only scans of the same contracts.
 
 ## License
