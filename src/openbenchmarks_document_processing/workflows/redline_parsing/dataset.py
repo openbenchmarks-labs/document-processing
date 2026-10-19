@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import DATASET_REPO, DATASET_REVISION, EXPECTED_CASES
+
+TURN = re.compile(r"-t(\d+)-")
 
 
 @dataclass(frozen=True)
@@ -13,6 +16,12 @@ class Document:
     document_id: str
     pdf: Path
     views: dict[str, Path] = field(default_factory=dict)
+
+    @property
+    def turn(self) -> int:
+        """The negotiation round, read from the id: s1-t3-g01a-contract is turn 3."""
+        match = TURN.search(self.document_id)
+        return int(match.group(1)) if match else 0
 
 
 @dataclass(frozen=True)
@@ -91,9 +100,16 @@ def validate(root: Path) -> None:
 
 
 def view_for(case: Case, documents: dict[str, Document], rendered: dict[str, str]) -> str:
+    """The markdown one case is answered against.
+
+    A cross-draft case asks what became of a proposal between rounds, so it
+    needs both drafts, in chronological order under headings, because the
+    question is about the order. The dataset does not list them in that order.
+    """
     if len(case.documents) == 1:
         return rendered[case.documents[0]]
-    return "\n\n".join(
-        f"===== DRAFT {document_id} =====\n\n{rendered[document_id]}"
-        for document_id in case.documents
-    )
+    parts = []
+    for document_id in sorted(case.documents, key=lambda d: documents[d].turn):
+        turn = documents[document_id].turn
+        parts.append(f"===== DRAFT AT TURN {turn} ({document_id}) =====\n\n{rendered[document_id]}")
+    return "\n\n".join(parts)

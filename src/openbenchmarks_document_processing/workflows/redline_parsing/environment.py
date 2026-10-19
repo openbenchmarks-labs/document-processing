@@ -7,7 +7,10 @@ from typing import Any
 from dotenv import load_dotenv
 
 PROVIDER_ENV = "DOC_PROCESSING_LLM_PROVIDER"
-DEFAULT_MODEL = "gpt-5.6-sol"
+# The reader answers every question; the judge buckets every answer. Separate
+# models, so a reader change never silently changes how answers are graded.
+DEFAULT_MODEL = "gpt-6-luna"
+DEFAULT_JUDGE_MODEL = "gpt-6-sol"
 
 
 def load_environment() -> None:

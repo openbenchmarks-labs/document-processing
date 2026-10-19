@@ -32,8 +32,9 @@ LLAMAPARSE_TIER = "agentic"
 # published agentic build 2026-09-09, which the parse endpoint then rejected as
 # an invalid tier/version combination mid-run. A rolling version also means two
 # runs of this arm can score different parses, which is the one thing a board
-# cannot allow. The board was re-run on the 2026-09-24 build of both tiers.
-LLAMAPARSE_VERSION = "2026-09-24"
+# cannot allow. The board runs agentic on its 2026-09-29 build and agentic
+# plus on its 2026-09-24 build, the newest each tier was measured on.
+LLAMAPARSE_VERSION = "2026-09-29"
 # The vendor's premium tier, run as its own arm rather than replacing `agentic`:
 # the published numbers were produced on agentic, so swapping it out would break
 # comparability, while hiding it would leave llamaparse the only vendor not
@@ -45,11 +46,11 @@ REDUCTO_MODEL = "r-1"
 # `change_tracking` in the include list the struck text comes back as ordinary
 # prose and the arm measures a flag rather than the parser.
 REDUCTO_FORMATTING = {"include": ["change_tracking"]}
-# Reducto moved r-1 to a new model on 2026-09-25 behind the same invocation: the
-# request is byte-identical, only what answers it changed. The date goes into the
-# settings fingerprint (never into the request) so a parse cached before the
-# change misses instead of being scored as the new model.
-REDUCTO_BUILD = "2026-09-25"
+# Reducto moves r-1 to a new model behind the same invocation (2026-09-25, then
+# 2026-10-06): the request is byte-identical, only what answers it changed. The
+# date goes into the settings fingerprint (never into the request) so a parse
+# cached before the change misses instead of being scored as the new model.
+REDUCTO_BUILD = "2026-10-06"
 # Highest-accuracy engine. Agentic OCR stays off: these are clean digital PDFs,
 # where the vendor's own guidance is that it only adds latency.
 EXTEND_ENGINE = "parse_performance"
@@ -57,6 +58,10 @@ EXTEND_ENGINE = "parse_performance"
 # detecting "insertions, deletions, substitutions indicated by strikethroughs,
 # colored text, or underlines", which is the entire signal this bench scores.
 EXTEND_ADVANCED = {"formattingDetection": [{"type": "change_tracking"}]}
+# Extend shipped new strikethrough parsing behind the same engine and options
+# (2026-10-16, then a GA release on 2026-10-17). As with Reducto, the date is
+# fingerprinted and never sent, so an earlier build's cached parse misses.
+EXTEND_BUILD = "2026-10-17"
 PULSE_URL = "https://api.runpulse.com/extract"
 PULSE_MODEL = "pulse-ultra-2"
 # Strikethrough is opt-in on Pulse. Without refine_options.formatting the model
@@ -80,6 +85,24 @@ DATALAB_TC_URL = "https://www.datalab.to/api/v1/track-changes"
 DATALAB_MODE = "accurate"
 DATALAB_POLL_SECONDS = 5
 DATALAB_MAX_WAIT = 1800
+# Consecutive failed polls (429, 5xx, a non-JSON body, a dropped connection)
+# before the job is given up on. Each one backs off first.
+DATALAB_POLL_FAILURES = 5
+# Unstructured's Transform Parse API, one document per call. `best` is the
+# profile the vendor recommends for complex layouts, dense tables and difficult
+# scans. There is no strikethrough or tracked-changes option to opt in to:
+# schema and prompt only drive field extraction, and advanced_options only
+# carries image_description, which contracts do not need.
+UNSTRUCTURED_URL = "https://transform.unstructured.io/api/v2/parse"
+UNSTRUCTURED_JOBS_URL = "https://transform.unstructured.io/api/v2/jobs"
+UNSTRUCTURED_PROFILE = "best"
+UNSTRUCTURED_OUTPUT = "markdown"
+# Submitted with `Prefer: wait=0` so the request returns a job at once and the
+# call polls, the same shape as Datalab, rather than holding a connection open
+# for up to fifteen minutes.
+UNSTRUCTURED_POLL_SECONDS = 5
+UNSTRUCTURED_MAX_WAIT = 1800
+UNSTRUCTURED_POLL_FAILURES = 5
 
 # The frontier arms. These are general models asked to do a parser's job, so the
 # only thing that makes them comparable to the vendors above -- or to each other
@@ -249,19 +272,24 @@ MAX_ATTEMPTS = 5
 
 
 def call_vendor(arm: str, pdf: Path, *, attempts: int = MAX_ATTEMPTS,
-                on_retry=None, sleep=time.sleep) -> tuple[str, dict, list[dict]]:
+                on_retry=None, sleep=time.sleep,
+                fresh: bool = False) -> tuple[str, dict, list[dict]]:
     """One vendor call, retried while the failure looks like weather.
 
     Returns the parse plus a log of every attempt that did not succeed. That log
     is what goes in the archive: one entry per try, rather than one archive
     entry per try, so a retried parse leaves a single record that says it was
     retried instead of several records that look like several parses.
+
+    `fresh` asks the vendor to bypass its own result cache, on the arms that
+    have one to bypass. Everywhere else a call is already a fresh parse.
     """
+    kwargs = {"fresh": True} if fresh and arm in VENDOR_CACHE_BYPASS else {}
     log: list[dict] = []
     for attempt in range(1, attempts + 1):
         started = time.time()
         try:
-            markdown, meta = VENDORS[arm](pdf)
+            markdown, meta = VENDORS[arm](pdf, **kwargs)
         except Exception as exc:  # noqa: BLE001 - classified immediately below
             status, verdict = classify(exc)
             entry = {"attempt": attempt, "status": status, "verdict": verdict,
@@ -286,7 +314,8 @@ def call_vendor(arm: str, pdf: Path, *, attempts: int = MAX_ATTEMPTS,
 
 # Anything that could carry a key. Vendor I/O is retained with local run
 # artifacts, so a header logged verbatim would leak a credential to any copy.
-SECRET_HEADERS = {"x-api-key", "authorization", "api-key", "token", "cookie"}
+SECRET_HEADERS = {"x-api-key", "authorization", "api-key", "token", "cookie",
+                  "unstructured-api-key"}
 
 
 def _redact(headers: dict) -> dict:
@@ -319,7 +348,8 @@ def _io(request: Any, response: Any) -> dict:
     return {"request": request, "response": response}
 
 
-def _llamaparse(pdf: Path, *, tier: str, version: str, label: str) -> tuple[str, dict]:
+def _llamaparse(pdf: Path, *, tier: str, version: str, label: str,
+                fresh: bool = False) -> tuple[str, dict]:
     from llama_cloud import LlamaCloud
 
     from .environment import load_environment
@@ -332,11 +362,17 @@ def _llamaparse(pdf: Path, *, tier: str, version: str, label: str) -> tuple[str,
     client = LlamaCloud(api_key=api_key, timeout=900)
     with pdf.open("rb") as handle:
         uploaded = client.files.create(file=handle, purpose="parse")
+    # LlamaCloud keeps a parse for 48 hours and hands the same job back to an
+    # identical request, even for a fresh upload. A repeat parse has to opt out,
+    # or repeat 3 is repeat 2 again. `disable_cache` both skips the cache and
+    # keeps this result out of it.
+    extra = {"disable_cache": True} if fresh else {}
     result = client.parsing.parse(
         file_id=uploaded.id,
         tier=tier,
         version=version,
         expand=["markdown"],
+        **extra,
     )
     pages = getattr(getattr(result, "markdown", None), "pages", None) or []
     markdown = "\n\n".join((getattr(p, "markdown", "") or "") for p in pages)
@@ -352,24 +388,33 @@ def _llamaparse(pdf: Path, *, tier: str, version: str, label: str) -> tuple[str,
         {"sdk": "llama_cloud", "calls": [
             {"method": "files.create", "purpose": "parse", "file": pdf.name},
             {"method": "parsing.parse", "file_id": uploaded.id, "tier": tier,
-             "version": version, "expand": ["markdown"]},
+             "version": version, "expand": ["markdown"], **extra},
         ]},
         {"files.create": _dump(uploaded), "parsing.parse": _dump(result)},
     )
     return markdown, meta
 
 
-def parse_llamaparse(pdf: Path) -> tuple[str, dict]:
+def parse_llamaparse(pdf: Path, *, fresh: bool = False) -> tuple[str, dict]:
     return _llamaparse(pdf, tier=LLAMAPARSE_TIER, version=LLAMAPARSE_VERSION,
-                       label="llamaparse")
+                       label="llamaparse", fresh=fresh)
 
 
-def parse_llamaparse_plus(pdf: Path) -> tuple[str, dict]:
+def parse_llamaparse_plus(pdf: Path, *, fresh: bool = False) -> tuple[str, dict]:
     return _llamaparse(pdf, tier=LLAMAPARSE_PLUS_TIER, version=LLAMAPARSE_PLUS_VERSION,
-                       label="llamaparse-plus")
+                       label="llamaparse-plus", fresh=fresh)
 
 
-def parse_reducto(pdf: Path) -> tuple[str, dict]:
+# Reducto documents no cache control, but it caches: an identical request for
+# the same file, even a fresh upload, comes back in ~0.2s with the earlier
+# job's output, for up to about an hour. The cache is keyed on the request
+# settings, `timeout` included (measured 2026-09-29). So a repeat parse sends a
+# timeout no other call has used. It is far above any real parse (seconds), so
+# it cannot change the result, only the cache key.
+REDUCTO_FRESH_TIMEOUT_BASE = 3600
+
+
+def parse_reducto(pdf: Path, *, fresh: bool = False) -> tuple[str, dict]:
     from reducto import Reducto
 
     from .environment import load_environment
@@ -382,7 +427,12 @@ def parse_reducto(pdf: Path) -> tuple[str, dict]:
     client = Reducto(api_key=api_key, timeout=900)
     with pdf.open("rb") as handle:
         uploaded = client.upload(file=handle)
-    result = client.parse.run(input=uploaded.file_id, settings={"model": REDUCTO_MODEL},
+    settings: dict = {"model": REDUCTO_MODEL}
+    if fresh:
+        import secrets
+
+        settings["timeout"] = REDUCTO_FRESH_TIMEOUT_BASE + secrets.randbelow(1_000_000)
+    result = client.parse.run(input=uploaded.file_id, settings=settings,
                               formatting=REDUCTO_FORMATTING)
 
     payload = result.model_dump() if hasattr(result, "model_dump") else {}
@@ -403,13 +453,14 @@ def parse_reducto(pdf: Path) -> tuple[str, dict]:
         "credits": usage.get("credits", 0),
         "credit_breakdown": usage.get("credit_breakdown"),
         "duration_s": payload.get("duration", 0),
+        "cache_bust_timeout": settings.get("timeout"),
         "parsed_at": datetime.now(timezone.utc).isoformat(),
     }
     meta["io"] = _io(
         {"sdk": "reducto", "calls": [
             {"method": "upload", "file": pdf.name},
             {"method": "parse.run", "input": uploaded.file_id,
-             "settings": {"model": REDUCTO_MODEL}, "formatting": REDUCTO_FORMATTING},
+             "settings": settings, "formatting": REDUCTO_FORMATTING},
         ]},
         {"upload": _dump(uploaded), "parse.run": payload},
     )
@@ -619,9 +670,33 @@ def _datalab_call(pdf: Path, url: str, data: dict, label: str) -> tuple[str, dic
 
     deadline = time.time() + DATALAB_MAX_WAIT
     polls: list[dict] = []
+    failed_in_a_row = 0
+    wait = DATALAB_POLL_SECONDS
     while True:
-        time.sleep(DATALAB_POLL_SECONDS)
-        polled = httpx.get(check_url, headers=headers, timeout=120).json()
+        time.sleep(wait)
+        wait = DATALAB_POLL_SECONDS
+        # A poll that fails is not a failed parse: the job is still running and
+        # already billed, so the answer is to wait and look again. Raising here
+        # would send call_vendor round to resubmit, and pay, for the same job.
+        try:
+            poll = httpx.get(check_url, headers=headers, timeout=120)
+            if poll.status_code >= 400:
+                raise VendorError(f"{label} poll {poll.status_code}: {poll.text[:200]}",
+                                  status=poll.status_code, arm=label)
+            polled = poll.json()
+        except Exception as exc:  # noqa: BLE001 - classified immediately below
+            status, verdict = classify(exc)
+            failed_in_a_row += 1
+            polls.append({"n": len(polls) + 1, "error": f"{type(exc).__name__}: {str(exc)[:200]}",
+                          "http_status": status})
+            if verdict == "fatal":
+                raise
+            if failed_in_a_row >= DATALAB_POLL_FAILURES or time.time() > deadline:
+                raise VendorError(f"{label} poll failed {failed_in_a_row} times in a row: {exc}",
+                                  status=status, arm=label) from exc
+            wait = retry_after(exc, failed_in_a_row)
+            continue
+        failed_in_a_row = 0
         # Every poll is kept, but only the last one carries the markdown, so
         # the earlier ones are recorded as status alone rather than in full.
         polls.append({"n": len(polls) + 1, "status": polled.get("status")})
@@ -655,24 +730,129 @@ def _datalab_call(pdf: Path, url: str, data: dict, label: str) -> tuple[str, dic
     return markdown, meta
 
 
-def parse_datalab(pdf: Path) -> tuple[str, dict]:
-    markdown, meta = _datalab_call(
-        pdf,
-        DATALAB_URL,
-        {"output_format": "markdown", "mode": DATALAB_MODE},
-        "datalab",
-    )
+def parse_datalab(pdf: Path, *, fresh: bool = False) -> tuple[str, dict]:
+    data = {"output_format": "markdown", "mode": DATALAB_MODE}
+    if fresh:
+        data["skip_cache"] = "true"
+    markdown, meta = _datalab_call(pdf, DATALAB_URL, data, "datalab")
     meta["mode"] = DATALAB_MODE
+    meta["skip_cache"] = fresh
     return markdown, meta
 
 
-def parse_datalab_tc(pdf: Path) -> tuple[str, dict]:
-    return _datalab_call(
-        pdf,
-        DATALAB_TC_URL,
-        {"output_format": "markdown"},
-        "datalab-tc",
+def parse_datalab_tc(pdf: Path, *, fresh: bool = False) -> tuple[str, dict]:
+    data = {"output_format": "markdown"}
+    if fresh:
+        data["skip_cache"] = "true"
+    markdown, meta = _datalab_call(pdf, DATALAB_TC_URL, data, "datalab-tc")
+    meta["skip_cache"] = fresh
+    return markdown, meta
+
+
+def parse_unstructured(pdf: Path) -> tuple[str, dict]:
+    """Unstructured Transform Parse API: submit, then poll the job to completion."""
+    import httpx
+
+    from .environment import load_environment
+
+    load_environment()
+    api_key = os.environ.get("UNSTRUCTURED_API_KEY")
+    if not api_key:
+        raise RuntimeError("UNSTRUCTURED_API_KEY is required for unstructured")
+
+    label = "unstructured"
+    headers = {"unstructured-api-key": api_key}
+    data = {"profile": UNSTRUCTURED_PROFILE, "output": UNSTRUCTURED_OUTPUT}
+    with pdf.open("rb") as handle:
+        response = httpx.post(
+            UNSTRUCTURED_URL,
+            headers={**headers, "Prefer": "wait=0"},
+            data=data,
+            files={"input": (pdf.name, handle, "application/pdf")},
+            timeout=300,
+        )
+    if response.status_code >= 400:
+        raise VendorError(f"{label} {response.status_code}: {response.text[:400]}",
+                          status=response.status_code, arm=label)
+    submitted = response.json()
+    job_id = submitted.get("id", "")
+
+    polls: list[dict] = []
+    poll_url = ""
+    if response.status_code == 200:
+        # The server may finish inside the submit even when asked not to wait;
+        # a 200 is then the ParseResult itself.
+        result = submitted
+    else:
+        poll_url = (submitted.get("poll_url") or response.headers.get("Location")
+                    or (f"{UNSTRUCTURED_JOBS_URL}/{job_id}" if job_id else ""))
+        if not poll_url:
+            raise RuntimeError(f"{label} gave no job to poll: {str(submitted)[:300]}")
+        if poll_url.startswith("/"):
+            poll_url = f"https://transform.unstructured.io{poll_url}"
+
+        deadline = time.time() + UNSTRUCTURED_MAX_WAIT
+        failed_in_a_row = 0
+        wait = UNSTRUCTURED_POLL_SECONDS
+        while True:
+            time.sleep(wait)
+            wait = UNSTRUCTURED_POLL_SECONDS
+            # A failed poll is not a failed parse: the job is still running and
+            # already billed, so wait and look again rather than resubmit.
+            try:
+                poll = httpx.get(poll_url, headers=headers,
+                                 params={"output": UNSTRUCTURED_OUTPUT}, timeout=120)
+                if poll.status_code >= 400:
+                    raise VendorError(f"{label} poll {poll.status_code}: {poll.text[:200]}",
+                                      status=poll.status_code, arm=label)
+                polled = poll.json()
+            except Exception as exc:  # noqa: BLE001 - classified immediately below
+                status, verdict = classify(exc)
+                failed_in_a_row += 1
+                polls.append({"n": len(polls) + 1,
+                              "error": f"{type(exc).__name__}: {str(exc)[:200]}",
+                              "http_status": status})
+                if verdict == "fatal":
+                    raise
+                if failed_in_a_row >= UNSTRUCTURED_POLL_FAILURES or time.time() > deadline:
+                    raise VendorError(f"{label} poll failed {failed_in_a_row} times in a row: {exc}",
+                                      status=status, arm=label) from exc
+                wait = retry_after(exc, failed_in_a_row)
+                continue
+            failed_in_a_row = 0
+            status = polled.get("status")
+            polls.append({"n": len(polls) + 1, "status": status})
+            if status in ("completed", "completed_with_warnings"):
+                break
+            if status in ("failed", "cancelled"):
+                raise VendorError(f"{label} {status}: {polled.get('error')}", arm=label)
+            if time.time() > deadline:
+                raise VendorError(f"{label} timed out after {UNSTRUCTURED_MAX_WAIT}s", arm=label)
+        result = polled.get("result") or {}
+
+    markdown = result.get("markdown") or ""
+    if not markdown:
+        raise RuntimeError(f"{label} returned no markdown; keys={sorted(result)}")
+
+    meta = {
+        "profile": result.get("profile") or UNSTRUCTURED_PROFILE,
+        "output": UNSTRUCTURED_OUTPUT,
+        "job_id": job_id or result.get("id", ""),
+        "n_pages": (result.get("metadata") or {}).get("page_count") or 0,
+        "format_version": result.get("format_version"),
+        "warnings": result.get("warnings") or [],
+        "parsed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    meta["io"] = _io(
+        {"submit": {"method": "POST", "url": UNSTRUCTURED_URL,
+                    "headers": _redact({**headers, "Prefer": "wait=0"}),
+                    "data": data, "files": {"input": pdf.name}},
+         "poll": {"method": "GET", "url": poll_url, "headers": _redact(headers),
+                  "every_seconds": UNSTRUCTURED_POLL_SECONDS}},
+        {"submit": {"status": response.status_code, "body": submitted},
+         "polls": polls, "final": result},
     )
+    return markdown, meta
 
 
 def parse_astra(pdf: Path) -> tuple[str, dict]:
@@ -869,6 +1049,7 @@ VENDORS = {
     "mistral-ocr": parse_mistral,
     "datalab": parse_datalab,
     "datalab-tc": parse_datalab_tc,
+    "unstructured": parse_unstructured,
     "astra": parse_astra,
     "fable": parse_fable,
 }
@@ -881,11 +1062,14 @@ SETTINGS: dict[str, dict] = {
     "llamaparse-plus": {"tier": LLAMAPARSE_PLUS_TIER, "version": LLAMAPARSE_PLUS_VERSION},
     "reducto": {"model": REDUCTO_MODEL, "formatting": REDUCTO_FORMATTING,
                 "build": REDUCTO_BUILD},
-    "extend": {"engine": EXTEND_ENGINE, "advanced_options": EXTEND_ADVANCED},
+    "extend": {"engine": EXTEND_ENGINE, "advanced_options": EXTEND_ADVANCED,
+               "build": EXTEND_BUILD},
     "pulse": {"model": PULSE_MODEL, "refine_options": PULSE_REFINE},
     "mistral-ocr": {"model": MISTRAL_MODEL},
     "datalab": {"url": DATALAB_URL, "mode": DATALAB_MODE},
     "datalab-tc": {"url": DATALAB_TC_URL},
+    "unstructured": {"url": UNSTRUCTURED_URL, "profile": UNSTRUCTURED_PROFILE,
+                     "output": UNSTRUCTURED_OUTPUT},
     # The prompt is a setting here in the way a formatting flag is for a vendor,
     # so it is fingerprinted: reword it and every cached frontier parse rightly
     # misses, because it is no longer the same measurement.
@@ -895,6 +1079,20 @@ SETTINGS: dict[str, dict] = {
 }
 
 ARMS = REFERENCE_ARMS + tuple(sorted(VENDORS))
+
+# Arms whose vendor keeps its own result cache, and so can hand a repeat call
+# the parse it made last time. A repeat parse there measures the cache rather
+# than the parser unless the call opts out:
+#   Datalab     `skip_cache`, documented on both endpoints.
+#   LlamaParse  `disable_cache`, documented (48-hour cache otherwise).
+#   Reducto     undocumented cache keyed on request settings; a unique timeout.
+# A 2026-09-29 run found LlamaParse and Reducto returning repeat 2 as repeat 3
+# before these were added. Extend reuses cached data only when handed an
+# existing file id, and every call uploads fresh; Pulse, Mistral, Unstructured
+# and the frontier models showed no caching.
+VENDOR_CACHE_BYPASS = frozenset({
+    "datalab", "datalab-tc", "llamaparse", "llamaparse-plus", "reducto",
+})
 
 # Whether this arm had to be *asked* for tracked changes. The single most
 # important fact about any number on this board: on four of these ten vendors
@@ -913,6 +1111,7 @@ TRACKED_CHANGES_OPT_IN = {
     "mistral-ocr": False,      # OCR endpoint has no such flag; emits ~~ or not
     "pulse": True,             # refine_options.formatting
     "reducto": True,           # formatting.include = change_tracking
+    "unstructured": False,     # no such option on the Parse API
 }
 
 
@@ -935,7 +1134,8 @@ IDENTITY: dict[str, dict[str, str]] = {
     "accepted":        {"vendor": "reference", "variant": "edits applied"},
     "datalab":         {"vendor": "Datalab", "variant": "convert · mode=accurate"},
     "datalab-tc":      {"vendor": "Datalab", "variant": "track-changes endpoint"},
-    "extend":          {"vendor": "Extend", "variant": f"engine={EXTEND_ENGINE}"},
+    "extend":          {"vendor": "Extend",
+                        "variant": f"engine={EXTEND_ENGINE} · {EXTEND_BUILD} build"},
     "llamaparse":      {"vendor": "LlamaParse",
                         "variant": f"tier={LLAMAPARSE_TIER} · {LLAMAPARSE_VERSION}"},
     "llamaparse-plus": {"vendor": "LlamaParse",
@@ -947,6 +1147,8 @@ IDENTITY: dict[str, dict[str, str]] = {
     "mistral-ocr":     {"vendor": "Mistral", "variant": f"model={MISTRAL_MODEL}"},
     "reducto":         {"vendor": "Reducto",
                         "variant": f"model={REDUCTO_MODEL} · {REDUCTO_BUILD} build"},
+    "unstructured":    {"vendor": "Unstructured",
+                        "variant": f"parse · profile={UNSTRUCTURED_PROFILE}"},
 }
 
 
@@ -1025,22 +1227,36 @@ def write_io(cache_dir: Path, document_id: str, arm: str, io: dict) -> Path:
     return path
 
 
+def repeat_label(arm: str, repeat: int) -> str:
+    """The cache slot for one repeat. Repeat 1 is the arm itself, so a cache
+    filled before repeats existed is still repeat 1."""
+    return arm if repeat <= 1 else f"{arm}.r{repeat}"
+
+
 def render(document, arm: str, cache_dir: Path, *, force: bool = False,
-           on_retry=None) -> tuple[str, dict]:
-    """Markdown for one document under one arm, plus what it cost to get."""
+           on_retry=None, repeat: int = 1) -> tuple[str, dict]:
+    """Markdown for one document under one arm, plus what it cost to get.
+
+    `repeat` > 1 is another parse of the same PDF with the same settings, kept
+    in its own cache slot and requested with the vendor's own result cache
+    bypassed where it has one: a repeat served from that cache is the same parse
+    twice, and would make the spread between repeats look smaller than it is.
+    Reference arms are files, not calls, so every repeat of one is the same.
+    """
     if arm in REFERENCE_ARMS:
         path = document.views.get(arm)
         if not path or not path.is_file():
             raise SystemExit(f"{document.document_id}: snapshot has no {arm} view")
         text = path.read_text(encoding="utf-8")
         return text, {"arm": arm, **identity(arm), "reference": True, "cached": True,
-                      "markdown_chars": len(text)}
+                      "markdown_chars": len(text), "repeat": repeat}
 
     if arm not in VENDORS:
         raise SystemExit(f"unknown arm {arm!r}; choose from {', '.join(ARMS)}")
 
     pdf = document.pdf
-    md_path, meta_path = cache_paths(cache_dir, document.document_id, arm)
+    label = repeat_label(arm, repeat)
+    md_path, meta_path = cache_paths(cache_dir, document.document_id, label)
     digest = sha256(pdf)
     fingerprint = settings_fingerprint(arm)
     if md_path.is_file() and meta_path.is_file() and not force:
@@ -1048,11 +1264,11 @@ def render(document, arm: str, cache_dir: Path, *, force: bool = False,
         if meta.get("pdf_sha256") == digest and meta.get("settings_sha256") == fingerprint:
             # Stamped on read as well as on write, so a cache filled before this
             # existed still reports which vendor and variant produced it.
-            meta.update({"cached": True, **identity(arm)})
+            meta.update({"cached": True, "repeat": repeat, **identity(arm)})
             return md_path.read_text(encoding="utf-8"), meta
 
     started = time.time()
-    markdown, meta, attempts = call_vendor(arm, pdf, on_retry=on_retry)
+    markdown, meta, attempts = call_vendor(arm, pdf, on_retry=on_retry, fresh=repeat > 1)
     # The verbatim exchange is bulky and is wanted in the archive rather than in
     # every meta.json the cache reads, so it goes to its own file next to it.
     exchange = meta.pop("io", None)
@@ -1076,6 +1292,8 @@ def render(document, arm: str, cache_dir: Path, *, force: bool = False,
         "settings_sha256": fingerprint,
         "markdown_chars": len(markdown),
         "cached": False,
+        "repeat": repeat,
+        "vendor_cache_bypassed": repeat > 1 and arm in VENDOR_CACHE_BYPASS,
     })
     if attempts:
         # One record that says it was retried, rather than one record per try.
@@ -1086,7 +1304,7 @@ def render(document, arm: str, cache_dir: Path, *, force: bool = False,
     cache_dir.mkdir(parents=True, exist_ok=True)
     md_path.write_text(markdown, encoding="utf-8")
     if exchange is not None:
-        written = write_io(cache_dir, document.document_id, arm, exchange)
+        written = write_io(cache_dir, document.document_id, label, exchange)
         meta["io_file"] = written.name
         meta["io_bytes"] = written.stat().st_size
     meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")

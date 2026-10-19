@@ -11,6 +11,8 @@ own number wins and these are only the fallback -- see cost_of_parse.
 from __future__ import annotations
 
 RATES_AS_OF = "2026-09-11"
+# The GPT-6 reader and judge rates were added later than the vendor rate card.
+LLM_RATES_AS_OF = "2026-09-29"
 
 # USD per page. Four of these are measurements rather than quotes: datalab and
 # datalab-tc return final_cost_cents, extend and pulse return the credits they
@@ -32,6 +34,9 @@ VENDOR_USD_PER_PAGE = {
     "llamaparse": 0.0125,
     "llamaparse-plus": 0.05625,
     "reducto": 0.01,
+    # List price for the Parse API, $15 per 1,000 pages. It returns no cost
+    # or credit field, only a page count, so this is the rate card.
+    "unstructured": 0.015,
 }
 
 # USD per credit, for the vendors that bill in credits and do not always return
@@ -52,6 +57,11 @@ LLM_RATES = {
     "gpt-5.6-terra": {"input": 2.00, "cached": 0.20, "write": 2.50, "output": 12.00},
     "gpt-5.6-luna":  {"input": 0.20, "cached": 0.02, "write": 0.25, "output": 1.20},
     "gpt-6-astra":   {"input": 10.00, "cached": 1.00, "write": 12.50, "output": 50.00},
+    # Native OpenAI list prices, checked 2026-09-29. The default reader and judge:
+    # gpt-6-sol is exactly half of gpt-5.6-sol on every line, and gpt-6-luna
+    # exactly a fortieth.
+    "gpt-6-sol":     {"input": 2.00, "cached": 0.20, "write": 2.50, "output": 10.00},
+    "gpt-6-luna":    {"input": 0.10, "cached": 0.01, "write": 0.125, "output": 0.50},
     "gpt-5.1":       {"input": 1.25, "cached": 0.125, "write": None, "output": 10.00},
 }
 LONG_CONTEXT_TOKENS = 272_000
@@ -110,7 +120,7 @@ def cost_of_llm(model: str, usage: dict | None) -> dict:
         "tokens_output": out,
         "model": model,
         "priced": True,
-        "rates_as_of": RATES_AS_OF,
+        "rates_as_of": LLM_RATES_AS_OF,
     }
 
 
