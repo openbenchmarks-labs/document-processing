@@ -102,7 +102,11 @@ def run_arm(arm: str, cases: list[Case], documents: dict[str, Document], client,
             try:
                 text, hop = ask(client, model, markdown, case.question, prefix)
                 error = None
-            except Exception as exc:  # noqa: BLE001 - this answer is lost, not the arm
+            except Exception as exc:  # noqa: BLE001 - classified immediately below
+                # A dead key or an empty account fails every answer the same way;
+                # stop the run instead of saving an arm of unscored rows.
+                if providers.classify(exc)[1] == "fatal":
+                    raise providers.FatalVendorError(f"reader {model}: {exc}") from exc
                 text, hop, error = "", {}, f"{type(exc).__name__}: {str(exc)[:300]}"
             row = {"id": case.id, "task_type": case.task_type, "documents": case.documents,
                    "repeat": repeat, "ask": ask_number, "answer": text,
@@ -112,7 +116,9 @@ def run_arm(arm: str, cases: list[Case], documents: dict[str, Document], client,
                    "reused": False}
             if error:
                 row["error"] = error
-            else:
+            elif text:
+                # An empty answer is not cached: it would stay unscored on every
+                # resume instead of being asked again.
                 atomic_json(path, {"key": key, "answer": text, "ask": hop, "row": row})
         with lock:
             done[0] += 1
@@ -212,7 +218,9 @@ def judge_rows(arm: str, rows: list[dict], cases: list[Case], client, model: str
                     client, model, refs,
                     [(short, pending[case_id][key][0]["answer"]) for short, key in todo])
                 error = None
-            except Exception as exc:  # noqa: BLE001 - this batch is lost, not the run
+            except Exception as exc:  # noqa: BLE001 - classified immediately below
+                if providers.classify(exc)[1] == "fatal":
+                    raise providers.FatalVendorError(f"judge {model}: {exc}") from exc
                 verdicts, missing, hop = {}, [short for short, _ in todo], {}
                 error = f"{type(exc).__name__}: {str(exc)[:200]}"
             usage = hop.get("response", {}).get("usage") or {}
@@ -263,19 +271,34 @@ def derive(run_dir: Path) -> dict:
         gap = None
         if floor is not None and ceiling is not None and ceiling != floor:
             gap = round((score["accuracy"] - floor) / (ceiling - floor), 8)
+        # The board's cost columns are per pass: one parse of the corpus and one
+        # answer per question, averaged over the replicates, so a 3x3 run and a
+        # single-shot run price the same thing.
         cost = arm.get("cost") or {}
-        total = cost.get("total_usd")
-        correct = score["buckets"]["correct"]
-        per_1k = (round(total / correct * 1000, 4)
-                  if total is not None and correct and arm.get("vendor") != "reference"
-                  else None)
+        repeats, asks = arm.get("repeats") or 1, arm.get("asks") or 1
+        all_rows = arm.get("rows") or []
+        questions = len(all_rows) / (repeats * asks) if all_rows else 0
+        correct = score["accuracy"] * questions
+        pages = sum((doc.get("cost") or {}).get("pages") or doc.get("n_pages") or 0
+                    for doc in arm.get("documents", []) if (doc.get("repeat") or 1) == 1)
+        vendor = cost.get("vendor_usd")
+        is_reference = arm.get("vendor") == "reference"
+        parse_pass = vendor / repeats if vendor is not None and not is_reference else None
+        tokens = sum(((row.get("usage") or {}).get("input_tokens") or 0)
+                     + ((row.get("usage") or {}).get("output_tokens") or 0) for row in all_rows)
+        tokens_pass = tokens / (repeats * asks) if tokens else None
+        per_1k_pages = round(parse_pass / pages * 1000, 4) if parse_pass is not None and pages else None
+        per_1k = round(parse_pass / correct * 1000, 4) if parse_pass is not None and correct else None
+        tokens_1k = round(tokens_pass / correct * 1000) if tokens_pass and correct else None
         rows.append({"arm": arm["arm"], "accuracy": score["accuracy"],
                      "accuracy_sd": score.get("accuracy_sd"),
                      "stale_rate": score["stale_rate"], "fused_rate": score["fused_rate"],
                      "n": score["n"], "unscored": score["unscored"],
                      "gap_closed": gap, "median_seconds": median, "p95_seconds": p95,
-                     "vendor_usd": cost.get("vendor_usd"), "total_usd": total,
-                     "cost_per_1k_correct": per_1k})
+                     "vendor_usd": cost.get("vendor_usd"), "total_usd": cost.get("total_usd"),
+                     "parser_usd_per_1k_pages": per_1k_pages,
+                     "parser_usd_per_1k_correct": per_1k,
+                     "tokens_per_1k_correct": tokens_1k})
     rows.sort(key=lambda item: (-item["accuracy"], item["arm"]))
     report = {"workflow": result["workflow"], "dataset": result["dataset"],
               "split": result["split"], "model": result["model"],
@@ -287,20 +310,23 @@ def derive(run_dir: Path) -> dict:
              f"Dataset: `{result['dataset']['repo']}@{result['dataset']['revision']}`",
              f"Reader: `{result['model']}` · judge: `{result.get('judge_model') or 'n/a'}` · "
              f"{result.get('repeats') or 1} parse(s) x {result.get('asks') or 1} ask(s)", "",
-             "| Rank | Arm | Accuracy | Stale | Fused | Gap closed | Median / p95 parse "
-             "| Cost / 1k correct | Unscored | N |",
-             "|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
+             "| Rank | Arm | Accuracy | Gap closed | Median parse time | Parser $ / 1k pages "
+             "| Parser $ / 1k correct | Total tokens / 1k correct | Stale | Fused | Unscored | N |",
+             "|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for rank, row in enumerate(rows, 1):
         accuracy = f"{row['accuracy']:.1%}"
         if row["accuracy_sd"] is not None:
             accuracy += f" ± {row['accuracy_sd']:.1%}"
-        gap = f"{row['gap_closed']:.1%}" if row["gap_closed"] is not None else "—"
-        latency = (f"{row['median_seconds']:.1f}s / {row['p95_seconds']:.1f}s"
-                   if row["median_seconds"] is not None else "—")
-        cost = (f"${row['cost_per_1k_correct']:.2f}"
-                if row["cost_per_1k_correct"] is not None else "—")
-        lines.append(f"| {rank} | {row['arm']} | {accuracy} | {row['stale_rate']:.1%} | "
-                     f"{row['fused_rate']:.1%} | {gap} | {latency} | {cost} | "
+        gap = f"{row['gap_closed']:.0%}" if row["gap_closed"] is not None else "n/a"
+        latency = (f"{row['median_seconds']:.0f}s (p95 {row['p95_seconds']:.0f}s)"
+                   if row["median_seconds"] is not None else "n/a")
+        usd = lambda v: f"${v:.2f}" if v is not None else "n/a"  # noqa: E731
+        tokens = row["tokens_per_1k_correct"]
+        tokens_text = ("n/a" if tokens is None else
+                       f"{tokens / 1e6:.1f}M" if tokens >= 1e6 else f"{tokens / 1e3:.0f}K")
+        lines.append(f"| {rank} | {row['arm']} | {accuracy} | {gap} | {latency} | "
+                     f"{usd(row['parser_usd_per_1k_pages'])} | {usd(row['parser_usd_per_1k_correct'])} | "
+                     f"{tokens_text} | {row['stale_rate']:.1%} | {row['fused_rate']:.1%} | "
                      f"{row['unscored']} | {row['n']} |")
     (run_dir / "report.md").write_text("\n".join(lines) + "\n")
     atomic_json(result_path, result)

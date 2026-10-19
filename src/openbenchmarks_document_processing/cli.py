@@ -129,12 +129,17 @@ def _execute(args, mode: str) -> int:
         "judge_model": args.judge_model, "repeats": args.repeats, "asks": args.asks,
         "dataset": manifest["dataset"], "arms": [],
     }
-    done = {entry["arm"] for entry in result["arms"]}
+    # An arm with unscored answers (a failed reader or judge call) is run again
+    # on resume. Its cached parses, answers and verdicts are reused, so only the
+    # missing answers are re-asked and only the unbucketed ones re-judged.
+    done = {entry["arm"] for entry in result["arms"]
+            if not (entry.get("score") or {}).get("unscored")}
     client = make_llm_client()
     for arm in args.arms:
         if arm in done:
             print(f"[{arm}] already complete", flush=True)
             continue
+        result["arms"] = [entry for entry in result["arms"] if entry["arm"] != arm]
         result["arms"].append(runner.run_arm(
             arm, cases, documents, client, args.model, run_dir, args.split,
             judge_model=args.judge_model, repeats=args.repeats, asks=args.asks,

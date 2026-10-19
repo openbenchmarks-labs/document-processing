@@ -37,19 +37,26 @@ def test_derivation_calculates_gap_closed_and_latency(tmp_path):
     assert vendor["median_seconds"] == 20
 
 
-def test_cost_per_1k_correct_counts_vendor_reader_and_judge(tmp_path):
-    rows = [{"bucket": "correct"}] * 8 + [{"bucket": "stale"}] * 2
+def test_board_columns_are_per_pass(tmp_path):
+    # 2 parses x 1 ask: the vendor bill covers two parses, the columns price one.
+    usage = {"input_tokens": 900, "output_tokens": 100}
+    rows = ([{"bucket": "correct", "repeat": r, "usage": usage} for r in (1, 2)] * 4
+            + [{"bucket": "stale", "repeat": r, "usage": usage} for r in (1, 2)])
     payload = {"workflow": "redline-parsing", "split": "tagged", "model": "reader",
                "dataset": {"repo": "example/data", "revision": "abc"},
-               "arms": [{"arm": "vendor", "vendor": "Example", "rows": rows,
-                         "cost": {"vendor_usd": 1.0, "reader_usd": 0.5, "judge_usd": 0.5,
-                                  "llm_usd": 1.0, "total_usd": 2.0}},
+               "arms": [{"arm": "vendor", "vendor": "Example", "repeats": 2, "asks": 1,
+                         "rows": rows, "cost": {"vendor_usd": 2.0, "total_usd": 2.5},
+                         "documents": [{"repeat": 1, "cost": {"pages": 100}},
+                                       {"repeat": 2, "cost": {"pages": 100}}]},
                         {"arm": "oracle", "vendor": "reference", "rows": rows,
                          "cost": {"total_usd": 1.0}}]}
     (tmp_path / "result.json").write_text(json.dumps(payload))
     ranking = {row["arm"]: row for row in runner.derive(tmp_path)["ranking"]}
-    assert ranking["vendor"]["cost_per_1k_correct"] == 250.0
-    assert ranking["oracle"]["cost_per_1k_correct"] is None
+    vendor = ranking["vendor"]
+    assert vendor["parser_usd_per_1k_pages"] == 10.0     # $1 per pass over 100 pages
+    assert vendor["parser_usd_per_1k_correct"] == 250.0  # $1 per pass over 4 correct
+    assert vendor["tokens_per_1k_correct"] == 1_250_000  # 5,000 tokens per pass over 4 correct
+    assert ranking["oracle"]["parser_usd_per_1k_correct"] is None
 
 
 class FakeModels:
@@ -124,3 +131,34 @@ def test_unusable_judge_reply_leaves_answer_unscored(tmp_path):
     assert result["rows"][0]["bucket"] == "unscored"
     assert result["score"]["unscored"] == 1
     assert result["score"]["n"] == 0
+
+
+def test_fatal_reader_error_stops_the_run(tmp_path):
+    import pytest
+
+    from openbenchmarks_document_processing.workflows.redline_parsing import providers
+
+    cases, documents = fixture(tmp_path)
+
+    class DeadKey:
+        def create(self, **_kwargs):
+            raise RuntimeError("401 invalid api key")
+
+    with pytest.raises(providers.FatalVendorError):
+        runner.run_arm("oracle", cases, documents, SimpleNamespace(responses=DeadKey()),
+                       "reader", tmp_path / "run", "tagged", judge_model="judge")
+
+
+def test_empty_answer_is_not_cached(tmp_path):
+    cases, documents = fixture(tmp_path)
+
+    class Empty(FakeModels):
+        def create(self, **kwargs):
+            response = super().create(**kwargs)
+            if response.model == "reader":
+                response.output_text = ""
+            return response
+
+    runner.run_arm("oracle", cases, documents, SimpleNamespace(responses=Empty()), "reader",
+                   tmp_path / "run", "tagged", judge_model="judge")
+    assert not list((tmp_path / "run" / "answers" / "tagged" / "oracle").glob("*.json"))
