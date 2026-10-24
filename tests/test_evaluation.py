@@ -45,3 +45,11 @@ def test_parse_verdicts_ignores_unknown_ids_and_disagreeing_duplicates():
 
 def test_unreadable_judge_reply_is_no_verdicts():
     assert parse_verdicts("no json here", ["a"]) == ({}, ["a"])
+
+
+def test_braces_before_the_verdict_object_do_not_drop_the_batch():
+    text = ('Considered the set {a, b}.\n'
+            '{"verdicts": [{"id": "a", "bucket": "correct", "why": "matches"}]}')
+    verdicts, missing = parse_verdicts(text, ["a"])
+    assert verdicts == {"a": ("correct", "matches")}
+    assert missing == []
