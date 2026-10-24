@@ -29,7 +29,10 @@ VENDOR_USD_PER_PAGE = {
     # The track changes processor is published at $6 per 1,000 pages, not the
     # $10 that convert accurate costs. Carried at $0.01 until 2026-09-11.
     "datalab-tc": 0.006,
-    "extend": 0.025,
+    # Extend lowered its credit price on 2026-10-23 ($0.0125 -> $0.01 a credit,
+    # 2 credits a page), so a page is $0.02. Parses before then were billed at the
+    # old rate; the board reprices them from their recorded credits.
+    "extend": 0.02,
     "pulse": 0.015,
     "llamaparse": 0.0125,
     "llamaparse-plus": 0.05625,
@@ -42,7 +45,7 @@ VENDOR_USD_PER_PAGE = {
 # USD per credit, for the vendors that bill in credits and do not always return
 # a page count.
 VENDOR_USD_PER_CREDIT = {
-    "extend": 0.0125,
+    "extend": 0.01,
     "pulse": 0.015,
     "reducto": 0.015,
 }
