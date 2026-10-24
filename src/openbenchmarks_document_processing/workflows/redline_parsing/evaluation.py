@@ -87,16 +87,38 @@ def references(case) -> dict:
     }
 
 
+def _verdict_payload(text: str) -> dict | None:
+    """The first JSON object that carries a verdict list.
+
+    A reply can mention other braces before that object. Taking the first `{`
+    through the last `}` makes the reply unreadable and drops the whole batch.
+    """
+    decoder = json.JSONDecoder()
+    body = text or ""
+    index = 0
+    while True:
+        start = body.find("{", index)
+        if start < 0:
+            return None
+        try:
+            payload, end = decoder.raw_decode(body, start)
+        except json.JSONDecodeError:
+            index = start + 1
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("verdicts"), list):
+            return payload
+        index = end
+
+
 def parse_verdicts(text: str, ids: list[str]) -> tuple[dict[str, tuple[str, str]], list[str]]:
     """(verdicts by id, ids still needing one). Unknown ids are ignored, a
     repeated id counts only if every copy agrees, and a bucket outside the set
     is treated as no verdict rather than guessed at."""
-    wanted = set(ids)
-    try:
-        payload = json.loads(re.search(r"\{.*\}", text or "", re.S).group(0))
-        entries = payload.get("verdicts") or []
-    except Exception:  # noqa: BLE001 - an unreadable reply is simply no verdicts
+    payload = _verdict_payload(text)
+    if payload is None:
         return {}, list(ids)
+    wanted = set(ids)
+    entries = payload.get("verdicts") or []
     seen: dict[str, list[tuple[str, str]]] = {}
     for entry in entries if isinstance(entries, list) else []:
         if not isinstance(entry, dict):
