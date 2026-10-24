@@ -13,7 +13,7 @@ A redline records what the parties struck out. In the Word file a deletion is se
 | Rank | Parser | Type | Accuracy | Gap closed | Median parse time | Parser $ / 1k pages | Parser $ / 1k correct | Total tokens / 1k correct | List price |
 |---:|---|---|---:|---:|---:|---:|---:|---:|---|
 | | Best case (reference) | Reference | 94.6% ± 0.0 | 100% | n/a | n/a | n/a | 19.4M | n/a |
-| 1 | Extend | Document parser | 93.1% ± 0.3 | 98% | 17s | $25.00 | $40.91 | 22.5M | $0.025 / page |
+| 1 | Extend | Document parser | 93.1% ± 0.3 | 98% | 17s | $20.00 | $32.73 | 22.5M | $0.020 / page |
 | 2 | Claude Fable 5.1 | Frontier model | 91.4% ± 0.3 | 95% | 336s | $109.67 | $182.99 | 20.8M | $11 / $55 per 1M tokens |
 | 3 | Reducto | Document parser | 84.8% ± 0.3 | 86% | 5s | $10.00 | $17.97 | 26.4M | $0.010 / page |
 | 4 | LlamaParse agentic plus | Long running agentic parser | 84.7% ± 0.3 | 86% | 82s | $56.25 | $101.17 | 24.0M | $0.05625 / page |
@@ -45,7 +45,7 @@ The same 94 contracts re-rendered to JPEG at 200 dpi and wrapped back into PDFs,
 |---:|---|---|---:|---:|---:|---:|---:|---:|---|
 | | Best case (reference) | Reference | 93.8% ± 0.3 | 100% | n/a | n/a | n/a | 19.6M | n/a |
 | 1 | GPT-6 Astra | Frontier model | 93.4% ± 0.5 | 99% | 248s | $66.14 | $107.91 | 21.0M | $10 / $50 per 1M tokens |
-| 2 | Extend | Document parser | 86.7% ± 0.3 | 90% | 20s | $25.00 | $43.93 | 24.4M | $0.025 / page |
+| 2 | Extend | Document parser | 86.7% ± 0.3 | 90% | 20s | $20.00 | $35.14 | 24.4M | $0.020 / page |
 | 3 | Reducto | Document parser | 83.9% ± 0.4 | 86% | 7s | $10.00 | $18.17 | 26.6M | $0.010 / page |
 | 4 | Datalab track changes | Document parser | 80.7% ± 0.5 | 81% | 40s | $10.00 | $18.89 | 25.0M | $0.006 / page |
 | 5 | LlamaParse agentic | Document parser | 79.9% ± 0.3 | 80% | 22s | $12.50 | $23.83 | 25.1M | $0.0125 / page |
@@ -59,7 +59,7 @@ Two arms from the tagged board have no row here. Claude Fable 5.1 could not be r
 
 ## Which document parser API is most accurate on legal contracts?
 
-Extend leads the tagged board at 93.1% accuracy, closing 98% of the gap between the baseline and a perfect parse, with a 1.8% stale rate. It returns a contract in 17s median. Claude Fable 5.1 is second at 91.4%, at 336s median and about four and a half times Extend's parser cost per correct answer.
+Extend leads the tagged board at 93.1% accuracy, closing 98% of the gap between the baseline and a perfect parse, with a 1.8% stale rate. It returns a contract in 17s median. Claude Fable 5.1 is second at 91.4%, at 336s median and more than five times Extend's parser cost per correct answer.
 
 Behind them, Reducto (84.8%), LlamaParse agentic plus (84.7%) and LlamaParse agentic (83.8%) are within a point of each other, close enough that the table does not support ordering them. Datalab track changes follows at 80.7%.
 
@@ -81,7 +81,7 @@ Measured on this corpus, which averages 24 pages per contract, as vendor spend p
 
 - Mistral OCR is cheapest at $16.54 per 1k correct on the tagged board, but at 36.9% accuracy most of what it is paid for is wrong.
 - Among parsers above 80%, Reducto is cheapest at $17.97 per 1k correct on the tagged board and $18.17 on the scanned board, with Datalab track changes close behind at $18.89 on both. Datalab track changes lists at $0.006 per page, the lowest list rate here, though Datalab billed $10 per 1,000 pages for this corpus.
-- Extend costs about $41 per 1k correct and posts the highest accuracy of any parser.
+- Extend costs about $33 per 1k correct and posts the highest accuracy of any parser.
 - The frontier models cost $108 to $183 per 1k correct. Their bills scale with tokens rather than pages.
 
 List price is reported separately from measured cost because per-page and per-token products do not share a billing unit.
@@ -242,6 +242,7 @@ Tests use fixtures and mocks. CI must never make paid provider calls. Contributi
 
 ## Changelog
 
+- **2026-10-24.** Extend repriced: $0.01 per credit instead of $0.0125, so $0.02 per page instead of $0.025. Parsing is unchanged (2 credits per page), so Extend was not re-run; its cost columns were recomputed from the credits recorded on every parse. Accuracy and rankings are unchanged.
 - **2026-10-19.** Harness updated to v2 and every vendor rebenchmarked. Each contract is parsed 3 times and each question asked 3 times per parse (13,500 graded answers per parser, accuracy reported ± SD). The reader is `gpt-6-luna` and a separate judge, `gpt-6-sol`, grades every answer; exact token matching is kept per answer for audit. Repeat parses bypass each vendor's own result cache. Rebenchmarked new versions of Extend, Reducto r-1 and LlamaParse agentic (2026-09-29). Added Unstructured (Parse API, `profile=best`).
 - **2026-09-26.** Rebenchmarked LlamaParse agentic and agentic plus on their 2026-09-24 builds, and Reducto on its newer r-1 model.
 - **2026-09-20.** Benchmark published: 1,500 questions on 94 redlined contracts, scored on tagged PDFs and on image-only scans of the same contracts.
