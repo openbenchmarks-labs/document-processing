@@ -48,7 +48,9 @@ VENDOR_USD_PER_PAGE = {
 VENDOR_USD_PER_CREDIT = {
     "extend": 0.01,
     "pulse": 0.015,
-    "reducto": 0.015,
+    # No reducto entry: Reducto moved standard accounts from credits to $10 per
+    # 1,000 pages on 2026-09-01 and now returns null credits, so it is priced
+    # from VENDOR_USD_PER_PAGE.
 }
 
 # USD per million tokens. `write` is the rate for tokens written into the prompt
