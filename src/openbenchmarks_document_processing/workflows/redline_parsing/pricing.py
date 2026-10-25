@@ -10,7 +10,7 @@ own number wins and these are only the fallback -- see cost_of_parse.
 """
 from __future__ import annotations
 
-RATES_AS_OF = "2026-09-11"
+RATES_AS_OF = "2026-10-22"
 # The GPT-6 reader and judge rates were added later than the vendor rate card.
 LLM_RATES_AS_OF = "2026-09-29"
 
@@ -26,10 +26,11 @@ VENDOR_USD_PER_PAGE = {
     # is not what this arm runs. This was carried at $0.001 until 2026-09-11,
     # which was the rate for an earlier OCR model and understated the arm 4x.
     "mistral-ocr": 0.004,
-    # The track changes processor is published at $6 per 1,000 pages, not the
-    # $10 that convert accurate costs. Carried at $0.01 until 2026-09-11.
+    # Track changes is a $6 per 1,000 pages add-on on top of a base processor,
+    # not a standalone rate. Datalab billed $10 per 1,000 pages for the run
+    # (final_cost_cents), and that billed figure is what the board uses.
     "datalab-tc": 0.006,
-    # Extend lowered its credit price on 2026-10-23 ($0.0125 -> $0.01 a credit,
+    # Extend lowered its credit price on 2026-10-22 ($0.0125 -> $0.01 a credit,
     # 2 credits a page), so a page is $0.02. Parses before then were billed at the
     # old rate; the board reprices them from their recorded credits.
     "extend": 0.02,
