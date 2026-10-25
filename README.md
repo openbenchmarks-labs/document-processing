@@ -80,7 +80,7 @@ Reducto returns a full contract in 5s median on tagged PDFs and 7s on scanned on
 Measured on this corpus, which averages 24 pages per contract, as vendor spend per thousand correct answers:
 
 - Mistral OCR is cheapest at $16.54 per 1k correct on the tagged board, but at 36.9% accuracy most of what it is paid for is wrong.
-- Among parsers above 80%, Reducto is cheapest at $17.97 per 1k correct on the tagged board and $18.17 on the scanned board, with Datalab track changes close behind at $18.89 on both. Datalab track changes is an add-on ($6 per 1,000 pages) on top of a base processor, and Datalab billed $10 per 1,000 pages in total for this corpus.
+- Among parsers above 80%, Reducto is cheapest at $17.97 per 1k correct on the tagged board and $18.17 on the scanned board, with Datalab track changes close behind at $18.89 on both. Datalab billed track changes at $10 per 1,000 pages on this corpus, per its own usage export.
 - Extend costs about $33 per 1k correct and posts the highest accuracy of any parser.
 - The frontier models cost $108 to $183 per 1k correct. Their bills scale with tokens rather than pages.
 
@@ -242,7 +242,7 @@ Tests use fixtures and mocks. CI must never make paid provider calls. Contributi
 
 ## Changelog
 
-- **2026-10-25.** List price now names the pricing plan each vendor is priced on. Datalab track changes list price corrected from $0.006 to $0.010 per page: $0.006 is the track changes add-on alone, and $0.010 is what Datalab billed for the run. Cost columns are unchanged.
+- **2026-10-25.** List price now names the pricing plan each vendor is priced on. Datalab track changes list price corrected from $0.006 to $0.010 per page: $0.010 is what Datalab billed per page for every track changes request (its usage export). Cost columns are unchanged.
 - **2026-10-24.** Extend repriced: $0.01 per credit instead of $0.0125, so $0.02 per page instead of $0.025. Parsing is unchanged (2 credits per page), so Extend was not re-run; its cost columns were recomputed from the credits recorded on every parse. Accuracy and rankings are unchanged.
 - **2026-10-19.** Harness updated to v2 and every vendor rebenchmarked. Each contract is parsed 3 times and each question asked 3 times per parse (13,500 graded answers per parser, accuracy reported ± SD). The reader is `gpt-6-luna` and a separate judge, `gpt-6-sol`, grades every answer; exact token matching is kept per answer for audit. Repeat parses bypass each vendor's own result cache. Rebenchmarked new versions of Extend, Reducto r-1 and LlamaParse agentic (2026-09-29). Added Unstructured (Parse API, `profile=best`).
 - **2026-09-26.** Rebenchmarked LlamaParse agentic and agentic plus on their 2026-09-24 builds, and Reducto on its newer r-1 model.
