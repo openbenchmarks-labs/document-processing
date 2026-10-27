@@ -10,7 +10,7 @@ own number wins and these are only the fallback -- see cost_of_parse.
 """
 from __future__ import annotations
 
-RATES_AS_OF = "2026-09-11"
+RATES_AS_OF = "2026-10-22"
 # The GPT-6 reader and judge rates were added later than the vendor rate card.
 LLM_RATES_AS_OF = "2026-09-29"
 
@@ -26,10 +26,13 @@ VENDOR_USD_PER_PAGE = {
     # is not what this arm runs. This was carried at $0.001 until 2026-09-11,
     # which was the rate for an earlier OCR model and understated the arm 4x.
     "mistral-ocr": 0.004,
-    # The track changes processor is published at $6 per 1,000 pages, not the
-    # $10 that convert accurate costs. Carried at $0.01 until 2026-09-11.
-    "datalab-tc": 0.006,
-    "extend": 0.025,
+    # Datalab's usage export bills every track changes request at exactly 1 cent
+    # a page. final_cost_cents is used when present; this is only the fallback.
+    "datalab-tc": 0.01,
+    # Extend lowered its credit price on 2026-10-22 ($0.0125 -> $0.01 a credit,
+    # 2 credits a page), so a page is $0.02. Parses before then were billed at the
+    # old rate; the board reprices them from their recorded credits.
+    "extend": 0.02,
     "pulse": 0.015,
     "llamaparse": 0.0125,
     "llamaparse-plus": 0.05625,
@@ -42,9 +45,11 @@ VENDOR_USD_PER_PAGE = {
 # USD per credit, for the vendors that bill in credits and do not always return
 # a page count.
 VENDOR_USD_PER_CREDIT = {
-    "extend": 0.0125,
+    "extend": 0.01,
     "pulse": 0.015,
-    "reducto": 0.015,
+    # No reducto entry: Reducto moved standard accounts from credits to $10 per
+    # 1,000 pages on 2026-09-01 and now returns null credits, so it is priced
+    # from VENDOR_USD_PER_PAGE.
 }
 
 # USD per million tokens. `write` is the rate for tokens written into the prompt

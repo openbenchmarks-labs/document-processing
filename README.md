@@ -13,17 +13,17 @@ A redline records what the parties struck out. In the Word file a deletion is se
 | Rank | Parser | Type | Accuracy | Gap closed | Median parse time | Parser $ / 1k pages | Parser $ / 1k correct | Total tokens / 1k correct | List price |
 |---:|---|---|---:|---:|---:|---:|---:|---:|---|
 | | Best case (reference) | Reference | 94.6% ± 0.0 | 100% | n/a | n/a | n/a | 19.4M | n/a |
-| 1 | Extend | Document parser | 93.1% ± 0.3 | 98% | 17s | $25.00 | $40.91 | 22.5M | $0.025 / page |
-| 2 | Claude Fable 5.1 | Frontier model | 91.4% ± 0.3 | 95% | 336s | $109.67 | $182.99 | 20.8M | $11 / $55 per 1M tokens |
-| 3 | Reducto | Document parser | 84.8% ± 0.3 | 86% | 5s | $10.00 | $17.97 | 26.4M | $0.010 / page |
-| 4 | LlamaParse agentic plus | Long running agentic parser | 84.7% ± 0.3 | 86% | 82s | $56.25 | $101.17 | 24.0M | $0.05625 / page |
-| 5 | LlamaParse agentic | Document parser | 83.8% ± 0.6 | 85% | 16s | $12.50 | $22.71 | 23.9M | $0.0125 / page |
-| 6 | Datalab track changes | Document parser | 80.7% ± 0.4 | 80% | 34s | $10.00 | $18.89 | 25.0M | $0.006 / page |
-| 7 | Datalab convert | Document parser | 63.9% ± 3.4 | 56% | 24s | $10.00 | $23.86 | 30.2M | $0.010 / page |
-| 8 | GPT-6 Astra | Frontier model | 61.6% ± 0.4 | 52% | 256s | $51.01 | $126.19 | 31.8M | $10 / $50 per 1M tokens |
-| 9 | Pulse | Document parser | 48.4% ± 0.4 | 33% | 53s | $15.00 | $47.17 | 89.4M | $0.015 / page |
-| 10 | Mistral OCR | Document parser | 36.9% ± 0.4 | 17% | 15s | $4.00 | $16.54 | 51.2M | $0.004 / page |
-| 11 | Unstructured | Document parser | 27.0% ± 0.2 | 3% | 65s | $15.00 | $84.67 | 70.3M | $0.015 / page |
+| 1 | Extend | Document parser | 93.1% ± 0.3 | 98% | 17s | $20.00 | $32.73 | 22.5M | $0.020 / page (Pay As You Go) |
+| 2 | Claude Fable 5.1 | Frontier model | 91.4% ± 0.3 | 95% | 336s | $109.67 | $182.99 | 20.8M | $11 / $55 per 1M tokens (API) |
+| 3 | Reducto | Document parser | 84.8% ± 0.3 | 86% | 5s | $10.00 | $17.97 | 26.4M | $0.010 / page (Standard) |
+| 4 | LlamaParse agentic plus | Long running agentic parser | 84.7% ± 0.3 | 86% | 82s | $56.25 | $101.17 | 24.0M | $0.05625 / page (Starter / Pro) |
+| 5 | LlamaParse agentic | Document parser | 83.8% ± 0.6 | 85% | 16s | $12.50 | $22.71 | 23.9M | $0.0125 / page (Starter / Pro) |
+| 6 | Datalab track changes | Document parser | 80.7% ± 0.4 | 80% | 34s | $10.00 | $18.89 | 25.0M | $0.010 / page (Pay as you go, billed) |
+| 7 | Datalab convert | Document parser | 63.9% ± 3.4 | 56% | 24s | $10.00 | $23.86 | 30.2M | $0.010 / page (Pay as you go, billed) |
+| 8 | GPT-6 Astra | Frontier model | 61.6% ± 0.4 | 52% | 256s | $51.01 | $126.19 | 31.8M | $10 / $50 per 1M tokens (API) |
+| 9 | Pulse | Document parser | 48.4% ± 0.4 | 33% | 53s | $15.00 | $47.17 | 89.4M | $0.015 / page (Self Serve) |
+| 10 | Mistral OCR | Document parser | 36.9% ± 0.4 | 17% | 15s | $4.00 | $16.54 | 51.2M | $0.004 / page (API) |
+| 11 | Unstructured | Document parser | 27.0% ± 0.2 | 3% | 65s | $15.00 | $84.67 | 70.3M | $0.015 / page (Pay-As-You-Go) |
 | | Baseline (reference) | Reference | 25.2% ± 0.4 | 0% | n/a | n/a | n/a | 72.2M | n/a |
 
 1,500 questions on 94 contracts, 2,286 pages. Each contract is parsed 3 times and each question is asked 3 times against every parse, so every parser arm is graded on 13,500 answers. The two reference arms are fixed Markdown with nothing to re-parse, so they are read once and asked 3 times (4,500 answers), and their ± is over those 3 asks. Reader model: gpt-6-luna. Judge model: gpt-6-sol.
@@ -35,7 +35,7 @@ How to read the columns:
 - **Median parse time** is the vendor's wall clock for one contract, over every parse.
 - **Parser $ / 1k pages** and **Parser $ / 1k correct** are what the vendor billed for one parse of the corpus (2,286 pages), per thousand pages and per thousand correct answers. Where a vendor reports its own charge (Datalab's billed cents, Extend's and Pulse's credits), that figure is used, so it can differ from list price.
 - **Total tokens / 1k correct** is the input and output tokens the reader spent answering one pass of the questions, per thousand correct answers. A parser that writes longer Markdown costs more to read downstream.
-- **List price** is the published rate for the exact endpoint and tier that was run.
+- **List price** is the published rate for the exact endpoint that was run, with the pricing plan it comes from in brackets. Vendors sell several plans; we price every vendor on the plan named here and do not compare across plans. Where the vendor reports its own charge, the list price shown is that billed rate.
 
 ## Results on scanned PDFs (image only, no text layer)
 
@@ -44,22 +44,22 @@ The same 94 contracts re-rendered to JPEG at 200 dpi and wrapped back into PDFs,
 | Rank | Parser | Type | Accuracy | Gap closed | Median parse time | Parser $ / 1k pages | Parser $ / 1k correct | Total tokens / 1k correct | List price |
 |---:|---|---|---:|---:|---:|---:|---:|---:|---|
 | | Best case (reference) | Reference | 93.8% ± 0.3 | 100% | n/a | n/a | n/a | 19.6M | n/a |
-| 1 | GPT-6 Astra | Frontier model | 93.4% ± 0.5 | 99% | 248s | $66.14 | $107.91 | 21.0M | $10 / $50 per 1M tokens |
-| 2 | Extend | Document parser | 86.7% ± 0.3 | 90% | 20s | $25.00 | $43.93 | 24.4M | $0.025 / page |
-| 3 | Reducto | Document parser | 83.9% ± 0.4 | 86% | 7s | $10.00 | $18.17 | 26.6M | $0.010 / page |
-| 4 | Datalab track changes | Document parser | 80.7% ± 0.5 | 81% | 40s | $10.00 | $18.89 | 25.0M | $0.006 / page |
-| 5 | LlamaParse agentic | Document parser | 79.9% ± 0.3 | 80% | 22s | $12.50 | $23.83 | 25.1M | $0.0125 / page |
-| 6 | LlamaParse agentic plus | Long running agentic parser | 74.9% ± 0.6 | 73% | 133s | $56.25 | $114.50 | 26.9M | $0.05625 / page |
-| 7 | Pulse | Document parser | 65.0% ± 0.6 | 59% | 57s | $15.00 | $35.17 | 30.2M | $0.015 / page |
-| 8 | Datalab convert | Document parser | 63.9% ± 3.2 | 57% | 50s | $10.00 | $23.84 | 30.2M | $0.010 / page |
-| 9 | Unstructured | Document parser | 27.0% ± 0.5 | 5% | 71s | $15.00 | $84.46 | 70.2M | $0.015 / page |
+| 1 | GPT-6 Astra | Frontier model | 93.4% ± 0.5 | 99% | 248s | $66.14 | $107.91 | 21.0M | $10 / $50 per 1M tokens (API) |
+| 2 | Extend | Document parser | 86.7% ± 0.3 | 90% | 20s | $20.00 | $35.14 | 24.4M | $0.020 / page (Pay As You Go) |
+| 3 | Reducto | Document parser | 83.9% ± 0.4 | 86% | 7s | $10.00 | $18.17 | 26.6M | $0.010 / page (Standard) |
+| 4 | Datalab track changes | Document parser | 80.7% ± 0.5 | 81% | 40s | $10.00 | $18.89 | 25.0M | $0.010 / page (Pay as you go, billed) |
+| 5 | LlamaParse agentic | Document parser | 79.9% ± 0.3 | 80% | 22s | $12.50 | $23.83 | 25.1M | $0.0125 / page (Starter / Pro) |
+| 6 | LlamaParse agentic plus | Long running agentic parser | 74.9% ± 0.6 | 73% | 133s | $56.25 | $114.50 | 26.9M | $0.05625 / page (Starter / Pro) |
+| 7 | Pulse | Document parser | 65.0% ± 0.6 | 59% | 57s | $15.00 | $35.17 | 30.2M | $0.015 / page (Self Serve) |
+| 8 | Datalab convert | Document parser | 63.9% ± 3.2 | 57% | 50s | $10.00 | $23.84 | 30.2M | $0.010 / page (Pay as you go, billed) |
+| 9 | Unstructured | Document parser | 27.0% ± 0.5 | 5% | 71s | $15.00 | $84.46 | 70.2M | $0.015 / page (Pay-As-You-Go) |
 | | Baseline (reference) | Reference | 23.6% ± 0.6 | 0% | n/a | n/a | n/a | 77.3M | n/a |
 
 Two arms from the tagged board have no row here. Claude Fable 5.1 could not be run: at 200 dpi the rendered pages exceed the model's input limit, and contracts in this corpus run to two dozen pages. Mistral OCR was not re-run: it rasterises and reads pixels either way, so removing the text layer cannot move it.
 
 ## Which document parser API is most accurate on legal contracts?
 
-Extend leads the tagged board at 93.1% accuracy, closing 98% of the gap between the baseline and a perfect parse, with a 1.8% stale rate. It returns a contract in 17s median. Claude Fable 5.1 is second at 91.4%, at 336s median and about four and a half times Extend's parser cost per correct answer.
+Extend leads the tagged board at 93.1% accuracy, closing 98% of the gap between the baseline and a perfect parse, with a 1.8% stale rate. It returns a contract in 17s median. Claude Fable 5.1 is second at 91.4%, at 336s median and more than five times Extend's parser cost per correct answer.
 
 Behind them, Reducto (84.8%), LlamaParse agentic plus (84.7%) and LlamaParse agentic (83.8%) are within a point of each other, close enough that the table does not support ordering them. Datalab track changes follows at 80.7%.
 
@@ -80,8 +80,8 @@ Reducto returns a full contract in 5s median on tagged PDFs and 7s on scanned on
 Measured on this corpus, which averages 24 pages per contract, as vendor spend per thousand correct answers:
 
 - Mistral OCR is cheapest at $16.54 per 1k correct on the tagged board, but at 36.9% accuracy most of what it is paid for is wrong.
-- Among parsers above 80%, Reducto is cheapest at $17.97 per 1k correct on the tagged board and $18.17 on the scanned board, with Datalab track changes close behind at $18.89 on both. Datalab track changes lists at $0.006 per page, the lowest list rate here, though Datalab billed $10 per 1,000 pages for this corpus.
-- Extend costs about $41 per 1k correct and posts the highest accuracy of any parser.
+- Among parsers above 80%, Reducto is cheapest at $17.97 per 1k correct on the tagged board and $18.17 on the scanned board, with Datalab track changes close behind at $18.89 on both. Datalab billed track changes at $10 per 1,000 pages on this corpus, per its own usage export.
+- Extend costs about $33 per 1k correct and posts the highest accuracy of any parser.
 - The frontier models cost $108 to $183 per 1k correct. Their bills scale with tokens rather than pages.
 
 List price is reported separately from measured cost because per-page and per-token products do not share a billing unit.
@@ -242,6 +242,8 @@ Tests use fixtures and mocks. CI must never make paid provider calls. Contributi
 
 ## Changelog
 
+- **2026-10-25.** List price now names the pricing plan each vendor is priced on. Datalab track changes list price corrected from $0.006 to $0.010 per page: $0.010 is what Datalab billed per page for every track changes request (its usage export). Cost columns are unchanged.
+- **2026-10-24.** Extend repriced: $0.01 per credit instead of $0.0125, so $0.02 per page instead of $0.025. Parsing is unchanged (2 credits per page), so Extend was not re-run; its cost columns were recomputed from the credits recorded on every parse. Accuracy and rankings are unchanged.
 - **2026-10-19.** Harness updated to v2 and every vendor rebenchmarked. Each contract is parsed 3 times and each question asked 3 times per parse (13,500 graded answers per parser, accuracy reported ± SD). The reader is `gpt-6-luna` and a separate judge, `gpt-6-sol`, grades every answer; exact token matching is kept per answer for audit. Repeat parses bypass each vendor's own result cache. Rebenchmarked new versions of Extend, Reducto r-1 and LlamaParse agentic (2026-09-29). Added Unstructured (Parse API, `profile=best`).
 - **2026-09-26.** Rebenchmarked LlamaParse agentic and agentic plus on their 2026-09-24 builds, and Reducto on its newer r-1 model.
 - **2026-09-20.** Benchmark published: 1,500 questions on 94 redlined contracts, scored on tagged PDFs and on image-only scans of the same contracts.
